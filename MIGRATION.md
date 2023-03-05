@@ -17,3 +17,7 @@ Initial Commit
 - ADD `SaveError::WriteFileError { path: PathBuf, contents: Vec<u8>, kind: std::io::ErrorKind }`
 	- Returned when save fails to write to a file that's already been `create`d
 	- `contents` will only appear when reporting the error with `Debug`
+
+## 0.1.2
+### Added docs for every public item
+(no migration required)

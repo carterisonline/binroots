@@ -38,7 +38,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// The generated code includes a new implementation of the input struct with the following changes:
 ///     - `derive`s [`Debug`], [`Default`], [`binroots::Serialize`][brserialize]
 ///     - Adds a `new` method to the struct, which constructs a new instance of the struct from its fields.
-///     - A #[default] marker inserted wherever possible, overrided by the `manual` annotation
+///     - A `#[default]` marker inserted wherever possible, overrided by the `manual` annotation
 // Example
 /// ```rust
 /// use binroots::binroots_enum;

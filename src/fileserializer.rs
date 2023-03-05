@@ -1,14 +1,15 @@
+//! ## `binroots::fileserializer`
+//! Contains [`SerializerError`][`crate::fileserializer::SerializerError`] and several internal definitions for serializing data into a file structure.
+
 use serde::Serialize;
 use tracing::instrument;
 
-pub type SerializerResult<T> = std::result::Result<T, SerializerError>;
+type SerializerResult<T> = std::result::Result<T, SerializerError>;
 
-// This is a bare-bones implementation. A real library would provide additional
-// information in its error type, for example the line and column at which the
-// error occurred, the byte offset into the input, or the current key being
-// processed.
+/// Errors during binroots' serialization process.
 #[derive(Debug)]
 pub enum SerializerError {
+    /// A message from the serializer
     Message(String),
 }
 
