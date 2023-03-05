@@ -1,0 +1,22 @@
+[package]
+name = "binroots-proc-macros"
+version = "0.1.0"
+authors = ["Carter Reeb <me@carteris.online>"]
+description = "Procedural macros indended for use by binroots."
+edition = "2021"
+repository = "https://github.com/carterisonline/binroots"
+homepage = "https://github.com/carterisonline/binroots"
+license = "Apache-2.0"
+license-file = "LICENSE"
+keywords = ["macro"]
+categories = []
+readme = "README.md"
+documentation = "https://docs.rs/binroots-proc-macros"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1"
+quote = "1"
+convert_case = "0.6"
