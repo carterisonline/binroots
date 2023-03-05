@@ -5,6 +5,12 @@
 //! ```rust
 //! use binroots::binroots_struct;
 //!
+//! # #[binroots::binroots_enum]
+//! # enum Activity {
+//! #     None, // <- Automatically chosen as the default value
+//! #     Playing(String),
+//! # }
+//!
 //! #[binroots_struct]
 //! struct Status {
 //!     connections: usize,
@@ -15,6 +21,8 @@
 //!
 //! ## Setting up an enum - see [`binroots_enum`][`crate::binroots_enum`]
 //! ```rust
+//! use binroots::binroots_enum;
+//!
 //! #[binroots_enum]
 //! enum Activity {
 //!     None, // <- Automatically chosen as the default value
@@ -24,6 +32,21 @@
 //!
 //! ## Saving data - see [`Save::save`][`crate::save::Save::save`] and [`binroots_struct`][`crate::binroots_struct`]
 //! ```rust
+//! # use binroots::{binroots_enum, binroots_struct};
+//! #[binroots_enum]
+//! # enum Activity {
+//! #     None, // <- Automatically chosen as the default value
+//! #     Playing(String),
+//! # }
+//! # #[binroots_struct]
+//! # struct Status {
+//! #     connections: usize,
+//! #     is_online: bool,
+//! #     activity: Activity,
+//! # }
+//!
+//! use binroots::save::SaveError;
+//!
 //! fn main() -> Result<(), SaveError> {
 //!     let mut status = Status::default();
 //!

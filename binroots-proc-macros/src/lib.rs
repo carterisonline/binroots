@@ -19,6 +19,8 @@ use syn::{parse_macro_input, DeriveInput};
 /// ```
 /// Notice how we're using `#[default]` to mark the default variant of `MyEnum`. It's also possible for `#[binroots_enum]` to automatically pick the default variant:
 /// ```
+/// use binroots::binroots_enum;
+///
 /// #[binroots_enum]
 /// pub enum MyEnum {
 ///     None, // Automatically chosen to be the default value
@@ -52,11 +54,9 @@ use syn::{parse_macro_input, DeriveInput};
 /// }
 ///
 /// fn main() {
-///     let activity = Activity::Playing("bideo games");
+///     let activity = Activity::Playing("bideo games".into());
 ///
-///     activity.save("activity").unwrap();
-///
-///     person.save().unwrap(); // Saves the enum to the disk
+///     activity.save("activity").unwrap(); // Saves the enum to the disk
 /// }
 /// ```
 /// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html
@@ -162,21 +162,21 @@ pub fn binroots_enum(
 /// }
 ///
 /// fn main() {
-///     let person = Person::new(
-///         "Alex".to_string(),
-///         "Male".to_string(),
+///     let mut person = Person::new(
+///         "Alex".into(),
+///         "Male".into(),
 ///         42,
-///         Some("alex@example.com".to_string()),
+///         Some("alex@example.com".into()),
 ///     );
 ///
 ///     // We need to dereference because `person.alice` is `binroots::field::BinrootsField<"name", u8>`
 ///     *person.name = "Alice".into();
-///     *person.gender = "Female".to_string();
+///     *person.gender = "Female".into();
 ///
 ///     person.save().unwrap(); // Saves the entire struct to the disk
 ///
-///     *person.email = Some("alice@example.com");
-///     *person.email.save(Person::ROOT_FOLDER).unwrap(); // Saves only person.email to the disk in its appropriate location
+///     *person.email = Some("alice@example.com".into());
+///     person.email.save(Person::ROOT_FOLDER).unwrap(); // Saves only person.email to the disk in its appropriate location
 /// }
 /// ```
 /// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html

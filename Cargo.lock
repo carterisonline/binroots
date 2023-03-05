@@ -19,8 +19,10 @@ dependencies = [
 name = "binroots-proc-macros"
 version = "0.1.1"
 dependencies = [
+ "binroots",
  "convert_case",
  "quote",
+ "serde",
  "syn",
 ]
 
