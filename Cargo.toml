@@ -23,10 +23,10 @@ tracing = "0.1"
 [workspace]
 members = ["./binroots-proc-macros"]
 
-[[bin]]
+[[example]]
 name = "example"
 path = "./bin/example.rs"
 
-[[bin]]
+[[example]]
 name = "manual"
 path = "./bin/manual.rs"
