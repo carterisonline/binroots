@@ -15,14 +15,9 @@ Binroots is a (cross-platform!) crate that provides a simple and efficient way t
 ## Project Status
 Writing the initial commit of this crate took me about 7 hours. There are no unit tests yet, and it requires nightly Rust. If you care about your code, please do not use this in production (yet!). I can't guarantee that your files will remain safe. If you're interested in the development of binroots, check out the [planned features](#planned-features) and follow my [Twitter](https://twitter.com/carterisonline/) (no promises of whatever else you'll see on there)
 
-## Usage
+## Installation
 
-Add it to your Cargo.toml:
-
-```toml
-[dependencies]
-binroots = "0.1.0"
-```
+Add it to your project using `cargo add binroots`
 
 ## Setting up a struct
 
