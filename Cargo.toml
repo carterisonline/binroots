@@ -5,23 +5,24 @@ authors = ["Carter Reeb <me@carteris.online>"]
 description = "Serialize and expose data, one file per field."
 edition = "2021"
 repository = "https://github.com/carterisonline/binroots"
+homepage = "https://github.com/carterisonline/binroots"
 license = "Apache-2.0"
-license-file = "LICENSE"
 keywords = ["serialization", "unix", "file", "macro", "filesystem"]
 categories = ["encoding", "filesystem"]
 readme = "README.md"
+documentation = "https://docs.rs/binroots"
 
 [dependencies]
 once_cell = "1"
 serde = { version = "1", features = ["derive"] }
 serde_tuple = "0.5"
-binroots-derive = { path = "./binroots-derive/" }
+binroots-proc-macros = { path = "./binroots-proc-macros", version = "0.1.0" }
 itoa = "1"
 ryu = "1"
 tracing = "0.1"
 
 [workspace]
-members = ["./binroots-derive"]
+members = ["./binroots-proc-macros"]
 
 [[bin]]
 name = "example"

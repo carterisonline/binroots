@@ -6,7 +6,7 @@ version = 3
 name = "binroots"
 version = "0.1.0"
 dependencies = [
- "binroots-derive",
+ "binroots-proc-macros",
  "itoa",
  "once_cell",
  "ryu",
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "binroots-derive"
+name = "binroots-proc-macros"
 version = "0.1.0"
 dependencies = [
  "convert_case",

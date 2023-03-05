@@ -4,7 +4,7 @@ pub mod field;
 pub mod fileserializer;
 pub mod save;
 
-pub use binroots_derive::*;
+pub use binroots_proc_macros::*;
 pub use serde::Serialize;
 
 use once_cell::sync::Lazy;
