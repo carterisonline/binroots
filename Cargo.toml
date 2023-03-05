@@ -1,6 +1,6 @@
 [package]
 name = "binroots"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Carter Reeb <me@carteris.online>"]
 description = "Serialize and expose data, one file per field."
 edition = "2021"
@@ -15,7 +15,7 @@ documentation = "https://docs.rs/binroots"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_tuple = "0.5"
-binroots-proc-macros = { path = "./binroots-proc-macros", version = "^0.1" }
+binroots-proc-macros = { path = "./binroots-proc-macros", version = "^0.2" }
 itoa = "1"
 ryu = "1"
 tracing = "0.1"
