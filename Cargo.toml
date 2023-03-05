@@ -29,4 +29,4 @@ path = "./examples/example.rs"
 
 [[example]]
 name = "manual"
-path = "./example/manual.rs"
+path = "./examples/manual.rs"
