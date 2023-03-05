@@ -1,9 +1,14 @@
-# binroots
-![Crates.io](https://img.shields.io/crates/v/binroots)
-![Crates.io](https://img.shields.io/crates/d/binroots)
-![Docs.rs](https://img.shields.io/badge/docs.rs-d2991d?&logo=docs.rs)
-![Crates.io](https://img.shields.io/crates/l/binroots)
-![Liberapay patrons](https://img.shields.io/liberapay/patrons/reebcw)
+# binroots &emsp; [![Version]][crate] [![Downloads]][crate] [![Docs]][docs.rs] [![License]][apache] [![Liberapay]][payurl]
+
+[Version]: https://img.shields.io/crates/v/binroots
+[crate]: https://crates.io/crates/binroots
+[Downloads]: https://img.shields.io/crates/d/binroots
+[Docs]: https://img.shields.io/badge/docs.rs-d2991d?&logo=docs.rs
+[docs.rs]: https://docs.rs/binroots
+[License]: https://img.shields.io/crates/l/binroots
+[apache]: https://www.apache.org/licenses/LICENSE-2.0
+[Liberapay]: https://img.shields.io/liberapay/patrons/reebcw
+[payurl]: https://liberapay.com/reebcw/
 
 Binroots is a (cross-platform!) crate that provides a simple and efficient way to save Rust data structures to disk. It allows you to save each field of a struct or enum variant as a separate file, making it easy to store reactive data, allowing end-users and hackers to watch individual files for changes and automate command-line tools for your app.
 
