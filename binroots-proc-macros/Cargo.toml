@@ -1,6 +1,6 @@
 [package]
 name = "binroots-proc-macros"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Carter Reeb <me@carteris.online>"]
 description = "Procedural macros indended for use by binroots."
 edition = "2021"

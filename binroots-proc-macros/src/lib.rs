@@ -2,6 +2,64 @@ use convert_case::{Case, Casing};
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
+/// # binroots_enum
+/// A procedural macro attribute that enables serialization, default and debug operations for an enum.
+/// Usage
+/// `#[binroots_enum]` can be applied to enums. The attribute generates an implementation of [`binroots::Serialize`][brserialize] (re-exported from serde::Serialize), and attempts to automatically pick the default value.
+/// ```rust
+/// use binroots::binroots_enum;
+///
+/// #[binroots_enum]
+/// pub enum MyEnum {
+///     VariantA,
+///     VariantB,
+///     #[default]
+///     VariantC,
+/// }
+/// ```
+/// Notice how we're using `#[default]` to mark the default variant of `MyEnum`. It's also possible for `#[binroots_enum]` to automatically pick the default variant:
+/// ```
+/// #[binroots_enum]
+/// pub enum MyEnum {
+///     None, // Automatically chosen to be the default value
+///           // #[binroots_enum] automatically picks the first instance of either "None", "Nothing", "Default" or "Empty" to be default.
+///     VariantA,
+///     VariantB,
+/// }
+///
+/// #[binroots_enum(manual)]
+/// pub enum MyManualEnum {
+///     None, // Not selected as the default variant because we use the `manual` annotation
+///     #[default]
+///     VariantA,
+///     VariantB
+/// }
+/// ```
+/// The generated code includes a new implementation of the input struct with the following changes:
+///     - `derive`s [`Debug`], [`Default`], [`binroots::Serialize`][brserialize]
+///     - Adds a `new` method to the struct, which constructs a new instance of the struct from its fields.
+///     - A #[default] marker inserted wherever possible, overrided by the `manual` annotation
+// Example
+/// ```rust
+/// use binroots::binroots_enum;
+/// use binroots::save::Save;
+///
+/// #[binroots_enum]
+/// pub enum Activity {
+///     Nothing,
+///     Playing(String),
+///     Watching(String),
+/// }
+///
+/// fn main() {
+///     let activity = Activity::Playing("bideo games");
+///
+///     activity.save("activity").unwrap();
+///
+///     person.save().unwrap(); // Saves the enum to the disk
+/// }
+/// ```
+/// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html
 #[proc_macro_attribute]
 pub fn binroots_enum(
     attr: proc_macro::TokenStream,
@@ -70,6 +128,60 @@ pub fn binroots_enum(
     output.into()
 }
 
+/// # binroots_struct
+/// A procedural macro attribute that enables serialization and structured file-saving for it and its fields.
+/// Usage
+/// `#[binroots_struct]` can be applied to any named struct with named fields. The attribute generates an implementation of [`binroots::Serialize`][brserialize] (re-exported from serde::Serialize) for the struct, as well as a set of methods for serializing, deserializing, and saving instances of the struct to disk.
+/// ```rust
+/// use binroots::binroots_struct;
+///
+/// #[binroots_struct]
+/// pub struct MyStruct {
+///     field1: i32,
+///     field2: String,
+///     field3: bool,
+/// }
+/// ```
+/// The generated code includes a new implementation of the input struct with the following changes:
+///     - Wraps each field in a [`binroots::field::BinrootsField`][brfield]
+///     - `derive`s [`Debug`] and [`binroots::Serialize`][brserialize]
+///     - Generates `Self::ROOT_FOLDER`, the kebab-case name of the struct
+///     - Adds a `new` method to the struct, which constructs a new instance of the struct from its fields.
+///     - Adds a `save` method to the struct, which serializes the struct and saves it to disk using the [`binroots::save::Save`][brsave] trait, saving to `Self::ROOT_FOLDER`.
+///     - A [`Default`] implementation is added to the struct, which constructs a default instance of the struct with default values for all fields.
+// Example
+/// ```rust
+/// use binroots::binroots_struct;
+///
+/// #[binroots_struct]
+/// pub struct Person {
+///     name: String,
+///     gender: String,
+///     age: u8,
+///     email: Option<String>,
+/// }
+///
+/// fn main() {
+///     let person = Person::new(
+///         "Alex".to_string(),
+///         "Male".to_string(),
+///         42,
+///         Some("alex@example.com".to_string()),
+///     );
+///
+///     // We need to dereference because `person.alice` is `binroots::field::BinrootsField<"name", u8>`
+///     *person.name = "Alice".into();
+///     *person.gender = "Female".to_string();
+///
+///     person.save().unwrap(); // Saves the entire struct to the disk
+///
+///     *person.email = Some("alice@example.com");
+///     *person.email.save(Person::ROOT_FOLDER).unwrap(); // Saves only person.email to the disk in its appropriate location
+/// }
+/// ```
+/// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html
+/// [brfield]: https://docs.rs/binroots/latest/binroots/field/struct.BinrootsField.html
+/// [brsave]: https://docs.rs/binroots/latest/binroots/save/trait.Save.html
 #[proc_macro_attribute]
 pub fn binroots_struct(
     _attr: proc_macro::TokenStream,
@@ -88,63 +200,6 @@ pub fn binroots_struct(
     } else {
         panic!("#[binroots_struct] only supports named struct fields")
     };
-
-    /*
-    let field_wrappers = fields.iter().map(|field| {
-        let field_name = &field.ident;
-        let field_type = &field.ty;
-        let binroots_field_name = Ident::new(
-            &format!("Binroots{}", field_name.as_ref().unwrap()),
-            field.span(),
-        );
-
-        quote! {
-            struct #binroots_field_name {
-                field_name: &'static str,
-                value: #field_type,
-            }
-
-            impl #binroots_field_name {
-                pub fn new(value: #field_type) -> Self {
-                    Self {
-                        field_name: stringify!(#field_name),
-                        value,
-                    }
-                }
-            }
-
-            impl From<#field_type> for #binroots_field_name {
-                fn from(value: #field_type) -> Self {
-                    Self::new(value)
-                }
-            }
-
-            impl From<#binroots_field_name> for #field_type {
-                fn from(binroots: #binroots_field_name) -> Self {
-                    binroots.value
-                }
-            }
-
-            impl Default for #binroots_field_name {
-                fn default() -> Self {
-                    Self::new(Default::default())
-                }
-            }
-
-            impl std::fmt::Display for #binroots_field_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "{}", self.value)
-                }
-            }
-
-            impl std::fmt::Debug for #binroots_field_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "{}", self)
-                }
-            }
-        }
-    });
-    */
 
     let field_names = fields.iter().map(|field| {
         let field_name = &field.ident.as_ref().unwrap();
@@ -176,15 +231,6 @@ pub fn binroots_struct(
         }
     });
 
-    /*let field_accessors = fields.iter().map(|field| {
-       let field_name = &field.ident;
-       quote! {
-           pub fn #field_name(&self) -> &binroots::field::BinrootsField</*Binroots#*/field_name> {
-               &self.#field_name
-           }
-       }
-    });*/
-
     let struct_name_str = struct_name.to_string().to_case(Case::Kebab);
 
     let output = quote! {
@@ -192,8 +238,6 @@ pub fn binroots_struct(
         #vis struct #struct_name {
             #( #field_names )*
         }
-
-        //#( #field_wrappers )*
 
         impl #struct_name {
             const ROOT_FOLDER: &'static str = #struct_name_str;
@@ -206,8 +250,6 @@ pub fn binroots_struct(
             pub fn save(&self) -> Result<(), binroots::save::SaveError> {
                 binroots::save::Save::save(self, Self::ROOT_FOLDER)
             }
-
-            //#( #field_accessors )*
         }
 
         impl Default for #struct_name {
@@ -218,13 +260,6 @@ pub fn binroots_struct(
             }
         }
 
-        /*
-        impl std::fmt::Display for #struct_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                #( write!(f, "{}: {}\n", stringify!(#field_names), self.#field_names) )*
-                Ok(())
-            }
-        }*/
     };
 
     output.into()
