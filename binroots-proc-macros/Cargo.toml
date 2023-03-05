@@ -7,7 +7,6 @@ edition = "2021"
 repository = "https://github.com/carterisonline/binroots"
 homepage = "https://github.com/carterisonline/binroots"
 license = "Apache-2.0"
-license-file = "LICENSE"
 keywords = ["macro"]
 categories = []
 readme = "README.md"
