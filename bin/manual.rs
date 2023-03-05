@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use binroots::save::Save;
+use binroots::save::{RootType, Save};
 use binroots::Serialize;
 
 #[derive(Serialize)]
@@ -28,7 +28,7 @@ struct Hello {
 }
 
 fn main() {
-    println!("{:?}", *binroots::BINROOTS_DIR);
+    println!("{:?}", binroots::save::root_location(RootType::InMemory));
     let h = Hello {
         world: "world".into(),
         num: 1,
@@ -42,5 +42,5 @@ fn main() {
         },
     };
 
-    h.save(PathBuf::from("hello")).unwrap();
+    h.save(PathBuf::from("hello"), RootType::InMemory).unwrap();
 }

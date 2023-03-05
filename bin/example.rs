@@ -1,5 +1,6 @@
 use binroots::binroots_enum;
 use binroots::binroots_struct;
+use binroots::save::RootType;
 use binroots::save::SaveError;
 
 #[binroots_enum]
@@ -8,7 +9,7 @@ enum Activity {
     Playing(String),
 }
 
-#[binroots_struct] // <- Gives Status and its data the ability be saved to the disk
+#[binroots_struct(persistent)] // <- Gives Status and its data the ability be saved to the disk
 struct Status {
     connections: usize,
     is_online: bool,
@@ -22,7 +23,9 @@ fn main() -> Result<(), SaveError> {
     status.save()?; // <- Saves the entire struct to the disk
 
     *status.activity = Activity::Playing("video gamb".into());
-    status.activity.save(Status::ROOT_FOLDER)?; // <- Only saves status.activity to the disk
+    status
+        .activity
+        .save(Status::ROOT_FOLDER, RootType::Persistent)?; // <- Only saves status.activity to the disk
 
     Ok(())
 }

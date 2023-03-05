@@ -12,7 +12,19 @@ use tracing::{info, instrument};
 
 use crate::field::BinrootsField;
 use crate::fileserializer::{FileSerializer, SerializerError};
-use crate::BINROOTS_DIR;
+
+/// Passed to [`Save::save`] to decide which path to save files to
+#[derive(Debug)]
+pub enum RootType {
+    /// Saves to an in-memory location:
+    /// - On Unix, `/tmp/<CARGO_PKG_NAME>/`
+    /// - On Windows, `%LOCALAPPDATA%\<CARGO_PKG_NAME>\.memcache\`
+    InMemory,
+    /// Saves to a persistent location:
+    /// - On Unix, `$HOME/.cache/<CARGO_PKG_NAME>/`
+    /// - On Windows, `%LOCALAPPDATA%\<CARGO_PKG_NAME>\.cache\`
+    Persistent,
+}
 
 /// Errors during the save process.
 #[derive(Debug)]
@@ -51,6 +63,10 @@ pub enum SaveError {
     ///
     /// See [`SerializerError`][`crate::fileserializer::SerializerError`]
     SerializeError(SerializerError),
+    /// An error caught while initializing retrieving the project's root directory.
+    ///
+    /// See [`RootLocationError`]
+    RootLocationError(RootLocationError),
 }
 
 impl std::fmt::Display for SaveError {
@@ -66,6 +82,7 @@ impl std::fmt::Display for SaveError {
                 Self::WriteFileError { path, kind, .. } =>
                     format!("Faile to write to {path:?} during save; {kind}"),
                 Self::SerializeError(e) => format!("Failed to serialize during save: {e}"),
+                Self::RootLocationError(e) => format!("{e}"),
             }
         )
     }
@@ -81,7 +98,7 @@ impl std::error::Error for SaveError {}
 ///
 /// ```
 /// use binroots::Serialize;
-/// use binroots::save::{Save, SaveError};
+/// use binroots::save::{RootType, Save, SaveError};
 ///
 /// #[derive(Serialize)]
 /// enum Activity {
@@ -103,7 +120,7 @@ impl std::error::Error for SaveError {}
 ///         field3: Activity::Playing("hideo kame".into()),
 ///     };
 ///
-///     me.save("mystruct")?;
+///     me.save("mystruct", RootType::InMemory)?;
 ///
 ///     // Resulting file structure on Unix:
 ///     // /tmp/<crate name>/mystruct
@@ -118,16 +135,16 @@ pub trait Save {
     /// [`Serialize`][`serde::Serialize`]s and saves data to "[BINROOTS_DIR][`crate::BINROOTS_DIR`]/\<root\>"
     ///
     /// See [`Save`][`crate::save::Save`] for an example of how to use it.
-    fn save<P: Into<PathBuf>>(&self, root: P) -> Result<(), SaveError>;
+    fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError>;
 }
 
 impl<T: Serialize> Save for T {
-    fn save<P: Into<PathBuf>>(&self, root: P) -> Result<(), SaveError> {
+    fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError> {
         let mut serializer = FileSerializer::default();
         self.serialize(&mut serializer)
             .map_err(|e| SaveError::SerializeError(e))?;
 
-        save_root(serializer, root.into())
+        save_root(serializer, root.into(), location)
     }
 }
 
@@ -135,20 +152,27 @@ impl<const N: &'static str, T: Serialize> BinrootsField<N, T> {
     /// [`Serialize`][`serde::Serialize`]s and saves data to "[BINROOTS_DIR][`crate::BINROOTS_DIR`]/\<root\>"
     ///
     /// Modifies the root save path by appending `BinrootsField::N` (generated as the field name by [`binroots::binroots_struct`][`crate::binroots_struct`])
-    pub fn save<P: Into<PathBuf>>(&self, root: P) -> Result<(), SaveError> {
+    pub fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError> {
         let mut serializer = FileSerializer::default();
         serializer.root = format!("/{N}");
         self.value
             .serialize(&mut serializer)
             .map_err(|e| SaveError::SerializeError(e))?;
 
-        save_root(serializer, root.into())
+        save_root(serializer, root.into(), location)
     }
 }
 
 #[instrument]
-pub(crate) fn save_root(serializer: FileSerializer, root: PathBuf) -> Result<(), SaveError> {
-    let path = (*BINROOTS_DIR).join(root);
+pub(crate) fn save_root(
+    serializer: FileSerializer,
+    root: PathBuf,
+    location: RootType,
+) -> Result<(), SaveError> {
+    let path = root_location(location)
+        .map_err(|e| SaveError::RootLocationError(e))?
+        .join(root);
+
     std::fs::create_dir_all(&path).map_err(|e| SaveError::CreateDirectoryError {
         path: path.clone(),
         kind: e.kind(),
@@ -202,4 +226,76 @@ pub(crate) fn save_root(serializer: FileSerializer, root: PathBuf) -> Result<(),
     }
 
     Ok(())
+}
+
+/// Errors during [`root_location`]
+#[derive(Debug)]
+pub enum RootLocationError {
+    /// Returned when [`root_location`] fails to resolve a path
+    PathBufError(std::convert::Infallible),
+    /// Returned when [`root_location`] fails to retrieve a runtime environment variable
+    GetVarError(std::env::VarError),
+    /// Returned when [`root_location`] encounters an error during the recursive creation of a folder structure
+    CreateDirectoryError {
+        /// The path where [`root_location`] attempted to create folders
+        path: PathBuf,
+        /// The resulting IO error kind.
+        ///
+        /// See [`std::io::ErrorKind`]
+        kind: std::io::ErrorKind,
+    },
+}
+
+impl std::fmt::Display for RootLocationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::PathBufError(inf) =>
+                    format!("Failed while retrieving the program's root directory: {inf}"),
+                Self::GetVarError(ve) =>
+                    format!("Failed to get an environment variable while retrieving the program's root directory: {ve}"),
+                Self::CreateDirectoryError { path, kind } =>
+                    format!("Failed to create (open) file at {path:?} while attempting to initialize the program's root directory; {kind}"),
+            }
+        )
+    }
+}
+
+/// Initializes and returns the active program root directory, the folder where files are stored when calling [`Save::save`][`crate::save::Save::save`]
+/// - On Windows, the path will always be `%LOCALAPPDATA%\<CARGO_PKG_NAME>\cache` regardless of `location`, since in-memory folders on Windows are inpossible with safe rust.
+/// - On Unix with [`RootType::InMemory`], `/tmp/<CARGO_PKG_NAME>/`
+/// - On Unix with [`RootType::Persistent`], `$HOME/.cache/<CARGO_PKG_NAME>/`
+///
+/// CARGO_PKG_NAME is generated during compile-time using the [`env`] macro.
+pub fn root_location(location: RootType) -> Result<PathBuf, RootLocationError> {
+    use std::str::FromStr;
+
+    #[cfg(target_family = "unix")]
+    let path = match location {
+        RootType::InMemory => PathBuf::from_str(&format!("/tmp/{}", env!("CARGO_PKG_NAME")))
+            .map_err(|e| RootLocationError::PathBufError(e)),
+        RootType::Persistent => PathBuf::from_str(&format!(
+            "{}/.cache/{}",
+            std::env::var("HOME").map_err(|e| RootLocationError::GetVarError(e))?,
+            env!("CARGO_PKG_NAME")
+        ))
+        .map_err(|e| RootLocationError::PathBufError(e)),
+    }?;
+
+    #[cfg(target_family = "windows")]
+    let path = PathBuf::from_str(&format!(
+        "{}\\{}\\.cache",
+        std::env::var("LOCALAPPDATA").map_err(|e| RootLocationError::GetVarError(e))?,
+        env!("CARGO_PKG_NAME")
+    ))
+    .map_err(|e| RootLocationError::PathBufError(e))?;
+
+    std::fs::create_dir_all(path.clone()).map_err(|e| RootLocationError::CreateDirectoryError {
+        path: path.clone(),
+        kind: e.kind(),
+    })?;
+
+    Ok(path)
 }

@@ -44,7 +44,7 @@ use syn::{parse_macro_input, DeriveInput};
 // Example
 /// ```rust
 /// use binroots::binroots_enum;
-/// use binroots::save::Save;
+/// use binroots::save::{RootType, Save};
 ///
 /// #[binroots_enum]
 /// pub enum Activity {
@@ -56,7 +56,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// fn main() {
 ///     let activity = Activity::Playing("bideo games".into());
 ///
-///     activity.save("activity").unwrap(); // Saves the enum to the disk
+///     activity.save("activity", RootType::InMemory).unwrap(); // Saves the enum to the disk
 /// }
 /// ```
 /// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html
@@ -135,8 +135,17 @@ pub fn binroots_enum(
 /// ```rust
 /// use binroots::binroots_struct;
 ///
-/// #[binroots_struct]
+/// #[binroots_struct] // Saves to `/tmp/<CARGO_PKG_NAME>/my-struct/` on Unix
 /// pub struct MyStruct {
+///     field1: i32,
+///     field2: String,
+///     field3: bool,
+/// }
+///
+/// // --- OR ---
+///
+/// #[binroots_struct(persistent)] // Saves to `$HOME/.cache/<CARGO_PKG_NAME>/my-persistent-struct/` on Unix
+/// pub struct MyPersistentStruct {
 ///     field1: i32,
 ///     field2: String,
 ///     field3: bool,
@@ -149,11 +158,13 @@ pub fn binroots_enum(
 ///     - Adds a `new` method to the struct, which constructs a new instance of the struct from its fields.
 ///     - Adds a `save` method to the struct, which serializes the struct and saves it to disk using the [`binroots::save::Save`][brsave] trait, saving to `Self::ROOT_FOLDER`.
 ///     - A [`Default`] implementation is added to the struct, which constructs a default instance of the struct with default values for all fields.
+///
 // Example
 /// ```rust
 /// use binroots::binroots_struct;
+/// use binroots::save::RootType;
 ///
-/// #[binroots_struct]
+/// #[binroots_struct] // Root save path on Unix is `/tmp/<CARGO_PKG_NAME>/person/` because we didn't annotate with `#[binroots_struct(persistent)]`
 /// pub struct Person {
 ///     name: String,
 ///     gender: String,
@@ -176,20 +187,30 @@ pub fn binroots_enum(
 ///     person.save().unwrap(); // Saves the entire struct to the disk
 ///
 ///     *person.email = Some("alice@example.com".into());
-///     person.email.save(Person::ROOT_FOLDER).unwrap(); // Saves only person.email to the disk in its appropriate location
+///     person.email.save(Person::ROOT_FOLDER, RootType::InMemory).unwrap(); // Saves only person.email to the disk in its appropriate location
 /// }
 /// ```
 /// [brserialize]: https://docs.rs/binroots/latest/binroots/trait.Serialize.html
 /// [brfield]: https://docs.rs/binroots/latest/binroots/field/struct.BinrootsField.html
 /// [brsave]: https://docs.rs/binroots/latest/binroots/save/trait.Save.html
+/// [brrt]: https://docs.rs/binroots/latest/binroots/save/struct.RootType.html
 #[proc_macro_attribute]
 pub fn binroots_struct(
-    _attr: proc_macro::TokenStream,
+    attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let struct_name = &input.ident;
     let vis = &input.vis;
+
+    let mut root_type =
+        quote!(const ROOT_TYPE: binroots::save::RootType = binroots::save::RootType::InMemory);
+
+    for a in attr {
+        if a.to_string() == "persistent" {
+            root_type = quote!(const ROOT_TYPE: binroots::save::RootType = binroots::save::RootType::Persistent);
+        }
+    }
 
     let fields = if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(ref fields),
@@ -241,6 +262,7 @@ pub fn binroots_struct(
 
         impl #struct_name {
             const ROOT_FOLDER: &'static str = #struct_name_str;
+            #root_type;
             pub fn new(#fields) -> Self {
                 Self {
                     #( #field_initializers_new )*
@@ -248,7 +270,7 @@ pub fn binroots_struct(
             }
 
             pub fn save(&self) -> Result<(), binroots::save::SaveError> {
-                binroots::save::Save::save(self, Self::ROOT_FOLDER)
+                binroots::save::Save::save(self, Self::ROOT_FOLDER, Self::ROOT_TYPE)
             }
         }
 

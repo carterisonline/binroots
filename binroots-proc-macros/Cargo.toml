@@ -1,6 +1,6 @@
 [package]
 name = "binroots-proc-macros"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Carter Reeb <me@carteris.online>"]
 description = "Procedural macros indended for use by binroots."
 edition = "2021"
@@ -21,5 +21,5 @@ quote = "1"
 convert_case = "0.6"
 
 [dev-dependencies]
-binroots = { path = "../", version = "0.1.2" }
+binroots = { path = "../", version = "0.2.0" }
 serde = "1"
