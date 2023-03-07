@@ -1,20 +1,19 @@
 //! ## `binroots::save`
 //!
 //! Contains the [`SaveError`][`crate::save::SaveError`] struct and the [`Save`][`crate::save::Save`] trait, as well as
-//! an implementation of `save` for [`BinrootsField`][`crate::field::BinrootsField`]
+//! an implementation of `save` for [`BinrootsField`][`crate::field::BinrootsField`]'
 
 use std::fs::File;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tracing::{info, instrument};
 
 use crate::field::BinrootsField;
-use crate::fileserializer::{FileSerializer, SerializerError};
+use crate::fileserializer::{FileOperationHint, FileSerializer, SerializerError};
 
 /// Passed to [`Save::save`] to decide which path to save files to
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RootType {
     /// Saves to an in-memory location:
     /// - On Unix, `/tmp/<CARGO_PKG_NAME>/`
@@ -41,6 +40,15 @@ pub enum SaveError {
     /// Returned when `save` fails to call [`std::fs::File::create`]
     CreateFileError {
         /// The path where `save` attempted to create a file
+        path: PathBuf,
+        /// The resulting IO error kind.
+        ///
+        /// See [`std::io::ErrorKind`]
+        kind: std::io::ErrorKind,
+    },
+    /// Returned when `save` fails to call [`std::fs::remove_file`]
+    DeleteFileError {
+        /// The path where `save` attempted to delete a file
         path: PathBuf,
         /// The resulting IO error kind.
         ///
@@ -79,6 +87,8 @@ impl std::fmt::Display for SaveError {
                     format!("Failed to create directory at {path:?} during save; {kind}"),
                 Self::CreateFileError { path, kind } =>
                     format!("Failed to create (open) file at {path:?} during save; {kind}"),
+                Self::DeleteFileError { path, kind } =>
+                    format!("Failed to delete a file at {path:?} during save; {kind}"),
                 Self::WriteFileError { path, kind, .. } =>
                     format!("Faile to write to {path:?} during save; {kind}"),
                 Self::SerializeError(e) => format!("Failed to serialize during save: {e}"),
@@ -135,16 +145,16 @@ pub trait Save {
     /// [`Serialize`][`serde::Serialize`]s and saves data to "[BINROOTS_DIR][`crate::BINROOTS_DIR`]/\<root\>"
     ///
     /// See [`Save`][`crate::save::Save`] for an example of how to use it.
-    fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError>;
+    fn save<P: Into<PathBuf>>(&self, root: P, root_type: RootType) -> Result<(), SaveError>;
 }
 
 impl<T: Serialize> Save for T {
-    fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError> {
+    fn save<P: Into<PathBuf>>(&self, root: P, root_type: RootType) -> Result<(), SaveError> {
         let mut serializer = FileSerializer::default();
         self.serialize(&mut serializer)
             .map_err(|e| SaveError::SerializeError(e))?;
 
-        save_root(serializer, root.into(), location)
+        save_root(serializer, root.into(), root_type)
     }
 }
 
@@ -152,78 +162,137 @@ impl<const N: &'static str, T: Serialize> BinrootsField<N, T> {
     /// [`Serialize`][`serde::Serialize`]s and saves data to "[BINROOTS_DIR][`crate::BINROOTS_DIR`]/\<root\>"
     ///
     /// Modifies the root save path by appending `BinrootsField::N` (generated as the field name by [`binroots::binroots_struct`][`crate::binroots_struct`])
-    pub fn save<P: Into<PathBuf>>(&self, root: P, location: RootType) -> Result<(), SaveError> {
+    pub fn save<P: Into<PathBuf>>(&self, root: P, root_type: RootType) -> Result<(), SaveError> {
         let mut serializer = FileSerializer::default();
         serializer.root = format!("/{N}");
         self.value
             .serialize(&mut serializer)
             .map_err(|e| SaveError::SerializeError(e))?;
 
-        save_root(serializer, root.into(), location)
+        save_root(serializer, root.into(), root_type)
     }
 }
 
-#[instrument]
 pub(crate) fn save_root(
     serializer: FileSerializer,
     root: PathBuf,
-    location: RootType,
+    root_type: RootType,
 ) -> Result<(), SaveError> {
-    let path = root_location(location)
+    let path = root_location(root_type.clone())
         .map_err(|e| SaveError::RootLocationError(e))?
         .join(root);
 
-    std::fs::create_dir_all(&path).map_err(|e| SaveError::CreateDirectoryError {
+    for file in serializer.output {
+        let path = &PathBuf::from(format!(
+            "{}{}",
+            path.to_string_lossy().trim_end_matches('/'),
+            if let Some(folder_variant) = file.folder_variant.clone() {
+                format!(".{folder_variant}")
+            } else {
+                format!("")
+            }
+        ));
+
+        let file_path = if let Some(name) = &file.name {
+            path.join(PathBuf::from(
+                format!("{}/{}", &file.path.trim_matches('/'), name).trim_start_matches("/"),
+            ))
+        } else {
+            path.join(PathBuf::from(&file.path.trim_matches('/')))
+        };
+
+        if file.hint == FileOperationHint::DeleteValue {
+            rmdir(file_path.with_extension("value"))?;
+            rm(file_path.with_extension("value"))?;
+        }
+
+        if !file.is_path {
+            std::fs::create_dir_all(if &file_path != path {
+                &path
+            } else {
+                path.parent().unwrap()
+            })
+            .map_err(|e| SaveError::CreateDirectoryError {
+                path: path.clone(),
+                kind: e.kind(),
+            })?;
+
+            if file.hint == FileOperationHint::Delete {
+                rm(file_path)?;
+            } else {
+                let filename = format!(
+                    "{}{}",
+                    file_path.to_string_lossy().trim_end_matches('/'),
+                    if let Some(ext) = &file.variant {
+                        format!(".{ext}")
+                    } else {
+                        format!("")
+                    }
+                );
+                save_to(filename.into(), file.output)?;
+            }
+        } else {
+            std::fs::create_dir_all(format!(
+                "{}{}",
+                file_path.to_string_lossy().trim_end_matches('/'),
+                if let Some(ext) = &file.variant {
+                    format!(".{ext}")
+                } else {
+                    format!("")
+                }
+            ))
+            .map_err(|e| SaveError::CreateDirectoryError {
+                path: file_path,
+                kind: e.kind(),
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn rmdir(path: PathBuf) -> Result<(), SaveError> {
+    std::fs::remove_dir_all(path.clone()).map_or_else(
+        |e| {
+            let kind = e.kind();
+
+            match kind {
+                ErrorKind::NotFound => Ok(()),
+                ErrorKind::NotADirectory => Ok(()),
+                _ => Err(SaveError::DeleteFileError { path, kind }),
+            }
+        },
+        |_| Ok(()),
+    )
+}
+
+fn rm(path: PathBuf) -> Result<(), SaveError> {
+    std::fs::remove_file(path.to_string_lossy().trim_end_matches('/')).map_or_else(
+        |e| {
+            let kind = e.kind();
+
+            match kind {
+                ErrorKind::NotFound => Ok(()),
+                _ => Err(SaveError::DeleteFileError { path, kind }),
+            }
+        },
+        |_| Ok(()),
+    )
+}
+
+fn save_to(path: PathBuf, contents: Vec<u8>) -> Result<(), SaveError> {
+    let mut file_tgt = File::create(&path).map_err(|e| SaveError::CreateFileError {
         path: path.clone(),
         kind: e.kind(),
     })?;
 
-    for file in serializer.output {
-        let ext = if let Some(ext) = &file.variant {
-            format!(".{ext}")
-        } else {
-            format!("")
-        };
-
-        let file_path = path.join(if let Some(name) = &file.name {
-            if file.path.ends_with(name.as_str()) {
-                format!("{}{}", &file.path.trim_start_matches("/"), ext)
-            } else {
-                format!("{}/{}{}", &file.path.trim_start_matches("/"), name, ext)
-            }
-        } else {
-            format!("{}{}", &file.path.trim_start_matches("/"), ext)
-        });
-
-        info!(
-            "Saving {:?} as a {}",
-            file_path,
-            if file.is_path { "path" } else { "file" }
-        );
-
-        if file_path == path || file.is_path {
-            std::fs::create_dir_all(file_path.clone()).map_err(|e| {
-                SaveError::CreateDirectoryError {
-                    path: file_path,
-                    kind: e.kind(),
-                }
-            })?;
-            continue;
-        }
-
-        let mut file_tgt = File::create(&file_path).map_err(|e| SaveError::CreateFileError {
-            path: file_path.clone(),
+    file_tgt
+        .write(&contents)
+        .map_err(|e| SaveError::WriteFileError {
+            path,
+            contents,
             kind: e.kind(),
         })?;
-
-        file_tgt
-            .write(&file.output)
-            .map_err(|e| SaveError::WriteFileError {
-                path: file_path,
-                contents: file.output,
-                kind: e.kind(),
-            })?;
-    }
 
     Ok(())
 }
